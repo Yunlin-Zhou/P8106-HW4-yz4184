@@ -5,6 +5,9 @@ output:
   pdf_document:
     toc: yes
     toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
   html_document:
     df_print: paged
     toc: yes
@@ -175,7 +178,7 @@ The most important predictors are expend and room_board.
 
 ```{r}
 pred.gbm <- predict(gbm1, newdata = test_df)
-te_gbm = RMSE(pred.pred.gbm, test_df$outstate)
+te_gbm = RMSE(pred.gbm, test_df$outstate)
 te_gbm
 ```
 
@@ -275,17 +278,16 @@ ggplot(gbmA.fit, highlight = TRUE)
 summary(gbmA.fit$finalModel, las = 2, cBars = 16, cex.names = 0.6)
 ```
 
-The most important predictors are expend and room_board.
+The most important variables are loyal_ch and price_diff.
 
 ### Test error
 
 ```{r}
-gbmA.pred <- predict(gbmA.fit, newdata = test_oj, type = "prob")
+gbmA.pred <- predict(gbmA.fit, newdata = test_oj)
 test.error = mean(gbmA.pred != test_oj$purchase)
 test_error_rate = test.error*100
 test_error_rate
 ```
 
-The test error rate is %.
-```
+The test error rate is`r test_error_rate`%.
 
