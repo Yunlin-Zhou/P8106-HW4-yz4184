@@ -1,0 +1,195 @@
+---
+title: "P8106_HW4_yz4184"
+author: "Yunlin Zhou"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{lipsum}
+- \pagestyle{fancy}
+- \fancyhead[R]{\thepage}
+- \fancypagestyle{plain}{\pagestyle{fancy}}
+--- 
+
+\newpage
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r, echo = T, message = FALSE, results='hide', warning=FALSE}
+library(tidyverse)
+library(ISLR)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(partykit)
+library(randomForest)
+library(ranger)
+library(gbm)
+library(pdp)
+library(pROC)
+```
+
+# Problem 1
+
+```{r, message = FALSE, results='hide', warning=FALSE}
+# Import and clean the data
+college_df = read.csv("./College.csv")%>%
+  janitor::clean_names()%>%
+  drop_na()%>%
+  relocate("outstate")%>%
+  select(-college)
+
+# Partition data into training/test sets
+set.seed(1)
+college_train = createDataPartition(y = college_df$outstate,
+                                    p =0.8,
+                                    list = FALSE)
+train_df = college_df[college_train,]
+test_df = college_df[-college_train,]
+```
+
+## Part a
+
+### Build a regression tree on the training data to predict the response.
+
+```{r}
+ctrl <- trainControl(method = "cv")
+
+set.seed(1)
+tree1 <- train(outstate ~ .,
+                  train_df, 
+                   method = "rpart",
+                   tuneGrid = data.frame(cp = exp(seq(-6,-2, length = 50))),
+                   trControl = ctrl)
+tree1$bestTune
+ggplot(tree1, highlight = TRUE)
+```
+
+In the pruned tree regression model, the tune parameter cp is `r tree1$bestTune`.
+
+###  Create a plot of the tree.
+
+```{r}
+rpart.plot(tree1$finalModel)
+```
+
+\newpage
+
+## Part b
+
+### Perform random forest on the training data.
+
+```{r}
+set.seed(1)
+rf.grid <- expand.grid(mtry = 1:16,
+                       splitrule = "variance",
+                       min.node.size = 1:6)
+
+rf1 <- train(outstate ~ .,
+             train_df,
+             method = "ranger",
+             tuneGrid = rf.grid,
+             trControl = ctrl)
+
+ggplot(rf1, highlight = TRUE)
+
+rf1$bestTune
+```
+
+In this random forest model, the best model is with minimum node size `r rf1$bestTune[[3]]` and `r rf1$bestTune[[1]]` selected predictors.
+
+### Report the variable importance.
+
+```{r}
+set.seed(1)
+rf1.final.per <- ranger(outstate ~ . , 
+                        train_df,
+                        mtry = rf1$bestTune[[1]], 
+                        splitrule = "variance",
+                        min.node.size = rf1$bestTune[[3]],
+                        importance = "permutation",
+                        scale.permutation.importance = TRUE) 
+
+barplot(sort(ranger::importance(rf1.final.per), decreasing = FALSE), 
+        las = 2, horiz = TRUE, cex.names = 0.7,
+        col = colorRampPalette(colors = c("cyan","blue"))(16))
+```
+
+Using the permutation method, the most important predictors are `expend` and `room_board`.
+
+### Report the test error.
+
+```{r}
+pred.rf <- predict(rf1, newdata = test_df)
+te_rf = RMSE(pred.rf, test_df$outstate)
+te_rf 
+```
+
+The test error is `r te_rf`.
+
+\newpage
+
+## Part c
+
+### Perform boosting on the training data.
+
+```{r}
+gbm.grid <- expand.grid(n.trees = c(2000,3000,4000,5000),
+                        interaction.depth = 1:5,
+                        shrinkage = c(0.001,0.003,0.005),
+                        n.minobsinnode = c(1,10))
+set.seed(1)
+gbm1 <- train(outstate ~ . ,
+              train_df,
+                 method = "gbm",
+                 tuneGrid = gbm.grid,
+                 trControl = ctrl,
+                 verbose = FALSE)
+
+gbm1$bestTune
+
+ggplot(gbm1, highlight = TRUE)
+```
+
+
+### Report the variable importance.
+
+```{r}
+summary(gbm1$finalModel, las = 2, cBars = 16, cex.names = 0.6)
+```
+
+Using the permutation method, the most important predictors are `expend` and `room_board`.
+
+### Report the test error.
+
+```{r}
+pred.gbm <- predict(gbm1, newdata = test_df)
+te_gbm = RMSE(pred.pred.gbm, test_df$outstate)
+te_gbm
+```
+
+The test error is `r te_gbm`.
+
+\newpage
+
+# Queation 2
+
+## Part a
+
+```{r}
+data(OJ)
+OJ <- 
+  na.omit(OJ) %>% 
+  janitor::clean_names()
+```
+
