@@ -77,6 +77,7 @@ ggplot(tree1, highlight = TRUE)
 
 In the pruned tree regression model, the tune parameter cp is `r tree1$bestTune`.
 
+
 ###  Create a plot of the tree.
 
 ```{r}
@@ -125,7 +126,7 @@ barplot(sort(ranger::importance(rf1.final.per), decreasing = FALSE),
         col = colorRampPalette(colors = c("cyan","blue"))(16))
 ```
 
-Using the permutation method, the most important predictors are `expend` and `room_board`.
+Using the permutation method, the most important predictors are expend and room_board.
 
 ### Report the test error.
 
@@ -168,7 +169,7 @@ ggplot(gbm1, highlight = TRUE)
 summary(gbm1$finalModel, las = 2, cBars = 16, cex.names = 0.6)
 ```
 
-Using the permutation method, the most important predictors are `expend` and `room_board`.
+The most important predictors are expend and room_board.
 
 ### Report the test error.
 
@@ -184,12 +185,107 @@ The test error is `r te_gbm`.
 
 # Queation 2
 
+```{r, message = FALSE, results='hide', warning=FALSE}
+# Import and clean the data
+data(OJ)
+oj_df= 
+  OJ %>% 
+  na.omit() %>% 
+  janitor::clean_names() 
+
+# Partition data into training/test sets
+set.seed(2)
+oj_train = createDataPartition(y = oj_df$purchase,
+                                p = 700/1070,
+                                    list = FALSE)
+train_oj = oj_df[oj_train,]
+test_oj = oj_df[-oj_train,]
+```
+
 ## Part a
 
+### Build a classification tree using the training data
+
 ```{r}
-data(OJ)
-OJ <- 
-  na.omit(OJ) %>% 
-  janitor::clean_names()
+set.seed(2)
+tree2 <- rpart(formula = purchase ~ . , 
+               data =  train_oj, 
+               control = rpart.control(cp = 0))
+
+cpTable <- printcp(tree2)
+plotcp(tree2)
+```
+
+###  Use cross-validation to determine the tree size and create a plot of the final tree.
+
+```{r}
+# minimum cross-validation error
+minErr <- which.min(cpTable[,4])
+tree3 <- prune(tree2, cp = cpTable[minErr,1])
+rpart.plot(tree3)
+summary(tree3)
+
+```
+
+When the tree size is `r cpTable[minErr,2]` corresponds to the lowest cross-validation error.
+
+### Using the 1 SE rule
+
+```{r}
+tree4 <- prune(tree2, cp = cpTable[cpTable[,4]<cpTable[minErr,4]+cpTable[minErr,5],1][1])
+rpart.plot(tree4)
+```
+
+The tree is smaller when the tree size obtained using the 1 SE rule.
+
+\newpage
+
+## Part b
+
+### Perform boosting on the training data.
+
+```{r}
+ctrl2 <- trainControl(method = "cv",
+                     classProbs = TRUE, 
+                     summaryFunction = twoClassSummary)
+
+gbmA.grid <- expand.grid(n.trees = c(2000,3000,4000,5000),
+                         interaction.depth = 1:6,
+                         shrinkage = c(0.0005,0.001,0.002),
+                         n.minobsinnode = 1)
+set.seed(2)
+gbmA.fit <- train(purchase ~ . ,
+                  data = train_oj,
+                  tuneGrid = gbmA.grid,
+                  trControl = ctrl2,
+                  method = "gbm",
+                  distribution = "adaboost",
+                  metric = "ROC",
+                  verbose = FALSE)
+
+ggplot(gbmA.fit, highlight = TRUE)
+
+
+```
+
+
+### Report the variable importance.
+
+```{r}
+summary(gbmA.fit$finalModel, las = 2, cBars = 16, cex.names = 0.6)
+```
+
+The most important predictors are expend and room_board.
+
+### Test error
+
+```{r}
+gbmA.pred <- predict(gbmA.fit, newdata = test_oj, type = "prob")
+test.error = mean(gbmA.pred != test_oj$purchase)
+test_error_rate = test.error*100
+test_error_rate
+```
+
+The test error rate is %.
 ```
 
